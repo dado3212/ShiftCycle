@@ -1,0 +1,10 @@
+{
+    entry = {
+	bundle = ShiftCycle;
+	cell = PSLinkCell;
+	detail = ShiftCycleListController;
+	icon = icon.png;
+	isController = 1;
+	label = ShiftCycle;
+    };
+}
