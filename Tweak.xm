@@ -7,19 +7,12 @@
 	+ (UIKeyboardImpl*)activeInstance;
 	- (void)insertText:(id)text;
 
-	- (void)clearAnimations;
-	- (void)clearTransientState;
-	- (void)setCaretBlinks:(BOOL)arg1;
-
 	@property (readonly, assign, nonatomic) UIResponder <UITextInputPrivate> *privateInputDelegate;
 	@property (readonly, assign, nonatomic) UIResponder <UITextInput> *inputDelegate;
 	@property(readonly, nonatomic) id <UIKeyboardInput> legacyInputDelegate;
 @end
 
-@interface UIKBShape : NSObject
-@end
-
-@interface UIKBKey : UIKBShape
+@interface UIKBKey : NSObject
 	@property(copy) NSString * representedString;
 @end
 
@@ -28,12 +21,20 @@
 	-(void)moveByOffset:(NSInteger)offset;
 @end
 
+@interface UIPhysicalKeyboardEvent : NSObject
+	@property (nonatomic,readonly) BOOL _isKeyDown; 
+	@property (nonatomic,readonly) long long _keyCode;    
+	- (void*)_hidEvent;     
+@end
+
 NSMutableArray *variants = [[NSMutableArray alloc] init];
 int variant = 0;
 bool change = false;
 static NSString *prefPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle.plist";
 
 static void fillArray(NSString *original) {
+	NSLog(@"Filling with variants of %@", original);
+
 	NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithContentsOfFile:prefPath];
 
 	NSNumber *uppercaseS = [settings objectForKey:@"uppercase"];
@@ -49,7 +50,7 @@ static void fillArray(NSString *original) {
 	if ([original length] != 0) {
 		variants = [[NSMutableArray alloc] init];
 		[variants addObject:original]; // original
-		NSString *uppercase = [original uppercaseString];
+		NSString *uppercase = [[original stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString];
 		NSString *lowercase = [original lowercaseString];
 		NSString *capitalized = [original capitalizedString];
 		NSString *concat = [[original capitalizedString] stringByReplacingOccurrencesOfString:@" " withString:@""];
@@ -67,32 +68,39 @@ static void fillArray(NSString *original) {
 	}
 }
 
+static void textReplace() {
+	UIKeyboardImpl *impl = [%c(UIKeyboardImpl) activeInstance];
+
+	id delegate = impl.privateInputDelegate ?: impl.inputDelegate;
+
+	variant = (variant + 1) % (int)[variants count];
+
+	change = true;
+	if ([NSStringFromClass([delegate class]) isEqualToString:@"WKContentView"]) { // Safari's broken Input
+		// Goddamnit.  No idea how to do this.
+		/*NSString *text = [variants objectAtIndex:variant];
+		[delegate insertText:text];*/
+	} else {
+		NSString *selectedString = [delegate textInRange:[delegate selectedTextRange]];
+		if ([selectedString length] > 0) {
+			NSInteger offset = [delegate offsetFromPosition:[delegate beginningOfDocument] toPosition:[[delegate selectedTextRange] start]];
+			NSString *text = [variants objectAtIndex:variant];
+			[delegate insertText:text];
+			UITextPosition *from = [delegate positionFromPosition:[delegate beginningOfDocument] offset:offset];
+			UITextPosition *to = [delegate positionFromPosition:from offset:text.length];
+			[delegate setSelectedTextRange:[delegate textRangeFromPosition:from toPosition:to]];
+		}
+	}
+	change = false;
+}
+
 %hook UIKeyboardLayoutStar
 	- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event {
 		UITouch *touch = [touches anyObject];
 		NSString *key = [[[self keyHitTest:[touch locationInView:touch.view]] representedString] lowercaseString];
 
 		if ([key isEqualToString:@"shift"] && (int)[variants count] > 0) {
-			UIKeyboardImpl *impl = [%c(UIKeyboardImpl) activeInstance];
-
-			id delegate = impl.privateInputDelegate ?: impl.inputDelegate;
-
-			variant = (variant + 1) % (int)[variants count];
-
-			change = true;
-			if ([NSStringFromClass([delegate class]) isEqualToString:@"WKContentView"]) { // Safari's broken Input
-				// Goddamnit.  No idea how to do this.
-				/*NSString *text = [variants objectAtIndex:variant];
-				[delegate insertText:text];*/
-			} else {
-				NSInteger offset = [delegate offsetFromPosition:[delegate beginningOfDocument] toPosition:[[delegate selectedTextRange] start]];
-				NSString *text = [variants objectAtIndex:variant];
-				[delegate insertText:text];
-				UITextPosition *from = [delegate positionFromPosition:[delegate beginningOfDocument] offset:offset];
-				UITextPosition *to = [delegate positionFromPosition:from offset:text.length];
-				[delegate setSelectedTextRange:[delegate textRangeFromPosition:from toPosition:to]];
-			}
-			change = false;
+			textReplace();
 		}
 		%orig;
 	}
@@ -142,4 +150,14 @@ static void fillArray(NSString *original) {
 		}
 	}
 
+	-(void)handleKeyEvent:(id)arg1 {
+		UIPhysicalKeyboardEvent *key = (UIPhysicalKeyboardEvent *)arg1;
+		if ([key _isKeyDown]) { // trigger on keydown not keyup
+			if ([key _hidEvent]) { // if this is nil (whenever a press is made on the built in keyboard), the call to _keyCode will fail
+				if ([key _keyCode] == 57  && (int)[variants count] > 0) // caps-lock
+					textReplace();
+			}
+		}
+		%orig;
+	}
 %end
