@@ -8,6 +8,19 @@ The current options are
  - Making The Text Titlecase
  - MakingTheTextHashtagCase
 
+### Installation
+
 To install it, either install from the .deb, or add the repository http://cydia.alexbeals.com to Cydia and download ShiftCycle.
 
-Built using THEOS.
+---
+
+<ul>
+  <li>
+  Objective-C
+  <ul>
+  <li>THEOS</li>
+  </ul>
+  </li>
+</ul>
+
+**Created by Alex Beals © 2015**
