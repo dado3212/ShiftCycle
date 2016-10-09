@@ -9,16 +9,26 @@
 
 	@property (readonly, assign, nonatomic) UIResponder <UITextInputPrivate> *privateInputDelegate;
 	@property (readonly, assign, nonatomic) UIResponder <UITextInput> *inputDelegate;
-	@property(readonly, nonatomic) id <UIKeyboardInput> legacyInputDelegate;
+	@property (readonly, nonatomic) id <UIKeyboardInput> legacyInputDelegate;
 @end
 
 @interface UIKBKey : NSObject
 	@property(copy) NSString * representedString;
 @end
 
-@interface WKContentView : UITextView
-	- (id)selectedText;
-	-(void)moveByOffset:(NSInteger)offset;
+@interface WKTextPosition : UITextPosition
+	@property (nonatomic) CGRect positionRect;
+@end
+
+@interface WKWebView : UIWebView
+	-(void)evaluateJavaScript:(id)arg1 completionHandler:(/*^block*/id)arg2;
+@end
+
+@interface WKContentView : UITextView {
+	WKWebView *_webView;
+}
+	-(id)selectedText;
+	-(void)replaceText:(id)arg1 withText:(id)arg2;
 @end
 
 @interface UIPhysicalKeyboardEvent : NSObject
@@ -29,27 +39,39 @@
 
 NSMutableArray *variants = [[NSMutableArray alloc] init];
 int variant = 0;
+NSString *lastInserted = nil;
 bool change = false;
-static NSString *prefPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle.plist";
+static NSString *oldPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle.plist";
+static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle-2.plist";
 
 // Function that takes in a string and fills a mutable array with all of the possible variants
 static void fillArray(NSString *original) {
-	// Pulls in options set in Settings pane to determine which are valid options
-	NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithContentsOfFile:prefPath];
+	// Initialize
+	variants = [[NSMutableArray alloc] init];
 
-	NSNumber *uppercaseS = [settings objectForKey:@"uppercase"];
-	NSNumber *lowercaseS = [settings objectForKey:@"lowercase"];
-	NSNumber *capitalizedS = [settings objectForKey:@"capitalized"];
-	NSNumber *concatS = [settings objectForKey:@"concatenated"];
+	// Check to see if the selected section actually has text
+	if ([original length] == 0) return;
 
-	BOOL upper = (uppercaseS == nil || uppercaseS.integerValue == 1);
-	BOOL lower = (lowercaseS == nil || lowercaseS.integerValue == 1);
-	BOOL capital = (capitalizedS == nil || capitalizedS.integerValue == 1);
-	BOOL conc = (concatS == nil || concatS.integerValue == 1);
+	// Add in the original
+	[variants addObject:original];
+	variant = 0;
 
-	if ([original length] != 0) {
-		variants = [[NSMutableArray alloc] init];
-		[variants addObject:original]; // original
+	// Check if the new path has been switched over
+	NSMutableArray *cycles = [[NSMutableArray alloc] initWithContentsOfFile:newPath];
+	if (cycles == nil) {
+		// Pulls in options set in Settings pane to determine which are enabled cycles
+		NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithContentsOfFile:oldPath];
+
+		NSNumber *uppercaseS = [settings objectForKey:@"uppercase"];
+		NSNumber *lowercaseS = [settings objectForKey:@"lowercase"];
+		NSNumber *capitalizedS = [settings objectForKey:@"capitalized"];
+		NSNumber *concatS = [settings objectForKey:@"concatenated"];
+
+		BOOL upper = (uppercaseS == nil || uppercaseS.integerValue == 1);
+		BOOL lower = (lowercaseS == nil || lowercaseS.integerValue == 1);
+		BOOL capital = (capitalizedS == nil || capitalizedS.integerValue == 1);
+		BOOL conc = (concatS == nil || concatS.integerValue == 1);
+
 		// uppercase is hardcoded to fix German's weird capitalization change of ß in 2010
 		NSString *uppercase = [[original stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString];
 		NSString *lowercase = [original lowercaseString];
@@ -63,24 +85,55 @@ static void fillArray(NSString *original) {
 			[variants addObject:capitalized];
 		if (![variants containsObject:concat] && conc)
 			[variants addObject:concat];
-		variant = 0;
-	} else {
-		variants = [[NSMutableArray alloc] init];
+	} else { // Use the new saved ordered system
+		for (int i = 0; i < [cycles count]; i++) {
+			BOOL enabled = ([cycles[i][2] boolValue]);
+      
+      if (enabled) {
+      	NSString *cycleType = cycles[i][0];
+      	NSString *newString = nil;
+				if ([cycleType isEqualToString:@"uppercase"]) {
+					newString = [[original stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString];
+				} else if ([cycleType isEqualToString:@"lowercase"]) {
+					newString = [original lowercaseString];
+				} else if ([cycleType isEqualToString:@"capitalized"]) {
+					newString = [original capitalizedString];
+				} else if ([cycleType isEqualToString:@"concatenated"]) {
+					newString = [[original capitalizedString] stringByReplacingOccurrencesOfString:@" " withString:@""];
+				}
+				if (![variants containsObject:newString])
+					[variants addObject:newString];
+			}
+    }
 	}
 }
 
+// Handles the text replacement
 static void textReplace() {
 	// Gets the current keyboard implementation
 	UIKeyboardImpl *impl = [%c(UIKeyboardImpl) activeInstance];
 
-	id delegate = impl.privateInputDelegate ?: impl.inputDelegate;
+	id delegate = impl.inputDelegate ?: impl.privateInputDelegate;
 
 	// Cycles to the new one to insert
 	variant = (variant + 1) % (int)[variants count];
 
 	change = true;
-	if ([NSStringFromClass([delegate class]) isEqualToString:@"WKContentView"]) { // Safari's broken Input
-		// Safari's input API is currently broken, and thus this is not possible.
+	// Works around Safari's broken text handling by injecting javascript
+	if ([NSStringFromClass([delegate class]) isEqualToString:@"WKContentView"]) {
+		NSString *selectedString = [delegate selectedText];
+
+		if ([selectedString length] > 0) {
+			NSString *text = [variants objectAtIndex:variant];
+
+			// Gets the current input, replaces the text, and re-selects
+			NSString *js = [NSString stringWithFormat:@"var repl = '%@'; var el = document.activeElement; var tagName = el ? el.tagName.toLowerCase() : null; if ((tagName == 'textarea' || tagName == 'input') && (typeof el.selectionStart == 'number')) { var val = el.value; var start = el.selectionStart; var end = el.selectionEnd; var text = val.slice(start, end); el.value = val.slice(0, start) + repl + val.slice(end); el.selectionStart = start; el.selectionEnd = start + repl.length; } ", text];
+			WKWebView *webView = MSHookIvar<WKWebView*>(delegate, "_webView");
+			[webView evaluateJavaScript:js completionHandler:^(id result, NSError *error) {
+				change = false;
+				lastInserted = text;
+			}];
+		}
 	} else {
 		NSString *selectedString = [delegate textInRange:[delegate selectedTextRange]];
 		if ([selectedString length] > 0) {
@@ -92,9 +145,11 @@ static void textReplace() {
 			UITextPosition *from = [delegate positionFromPosition:[delegate beginningOfDocument] offset:offset];
 			UITextPosition *to = [delegate positionFromPosition:from offset:text.length];
 			[delegate setSelectedTextRange:[delegate textRangeFromPosition:from toPosition:to]];
+
+			lastInserted = text;
 		}
+		change = false;
 	}
-	change = false;
 }
 
 %hook UIKeyboardLayoutStar
@@ -110,8 +165,8 @@ static void textReplace() {
 	}
 %end
 
-// A failed attempt to handle Safari's broken input
-%hook WKContentView 
+// Handles Safari's broken selection detection
+%hook WKContentView
 	-(void)_selectionChanged {
 		%orig;
 
@@ -120,10 +175,26 @@ static void textReplace() {
 
 			id delegate = impl.privateInputDelegate ?: impl.inputDelegate;
 
-			if ([NSStringFromClass([delegate class]) isEqualToString:@"WKContentView"]) { // Safari's broken Input
+			// Triggers whenever the bounds change and also just seemingly randomly
+			if ([NSStringFromClass([delegate class]) isEqualToString:@"WKContentView"]) {
 				NSString *selectedString = (NSString *)[(WKContentView *)delegate selectedText];
+			
+				double start_x = [(WKTextPosition *)[[delegate selectedTextRange] start] positionRect].origin.x;
+				double start_y = [(WKTextPosition *)[[delegate selectedTextRange] start] positionRect].origin.y;
+				double end_x = [(WKTextPosition *)[[delegate selectedTextRange] end] positionRect].origin.x;
+				double end_y = [(WKTextPosition *)[[delegate selectedTextRange] end] positionRect].origin.y;
 
-				fillArray(selectedString);
+				// Check if there's something selected
+				if (start_x < end_x && start_y <= end_y) {
+					// Check that it wasn't what you just inserted (to keep from wiping initial configs)
+					if (![selectedString isEqualToString:lastInserted]) {
+						fillArray(selectedString);
+						lastInserted = nil;
+					}
+				} else {
+					variants = [[NSMutableArray alloc] init];
+					lastInserted = nil;
+				}
 			}
 		}
 	}
@@ -136,10 +207,23 @@ static void textReplace() {
 		if (!change) {
 			id inpd = self.privateInputDelegate ?: self.inputDelegate;
 
-			NSString *selectedString;
+			NSString *selectedString = nil;
 
-			if ([NSStringFromClass([inpd class]) isEqualToString:@"WKContentView"]) { // Safari's broken Input
-				selectedString = (NSString *)[(WKContentView *)inpd selectedText];
+			// Triggers when tapping and choosing 'Select', not when adjusting the bounds
+			if ([NSStringFromClass([inpd class]) isEqualToString:@"WKContentView"]) {
+				double start_x = [(WKTextPosition *)[[inpd selectedTextRange] start] positionRect].origin.x;
+				double start_y = [(WKTextPosition *)[[inpd selectedTextRange] start] positionRect].origin.y;
+				double end_x = [(WKTextPosition *)[[inpd selectedTextRange] end] positionRect].origin.x;
+				double end_y = [(WKTextPosition *)[[inpd selectedTextRange] end] positionRect].origin.y;
+
+				// Check if there's something selected
+				if (start_x < end_x && start_y <= end_y) {
+					selectedString = (NSString *)[(WKContentView *)inpd selectedText];
+					lastInserted = nil;
+				} else {
+					variants = [[NSMutableArray alloc] init];
+					return;
+				}
 			} else {
 				UITextRange *selRange = [inpd selectedTextRange];
 
