@@ -184,8 +184,10 @@ static void textReplace() {
 				double end_x = [(WKTextPosition *)[[delegate selectedTextRange] end] positionRect].origin.x;
 				double end_y = [(WKTextPosition *)[[delegate selectedTextRange] end] positionRect].origin.y;
 
+				double size = [(WKTextPosition *)[[delegate selectedTextRange] start] positionRect].size.width;
+
 				// Check if there's something selected
-				if (start_x < end_x && start_y <= end_y) {
+				if (start_x < (end_x - size) && start_y <= end_y) {
 					// Check that it wasn't what you just inserted (to keep from wiping initial configs)
 					if (![selectedString isEqualToString:lastInserted]) {
 						fillArray(selectedString);
@@ -216,8 +218,10 @@ static void textReplace() {
 				double end_x = [(WKTextPosition *)[[inpd selectedTextRange] end] positionRect].origin.x;
 				double end_y = [(WKTextPosition *)[[inpd selectedTextRange] end] positionRect].origin.y;
 
+				double size = [(WKTextPosition *)[[inpd selectedTextRange] start] positionRect].size.width;
+
 				// Check if there's something selected
-				if (start_x < end_x && start_y <= end_y) {
+				if (start_x < (end_x - size) && start_y <= end_y) {
 					selectedString = (NSString *)[(WKContentView *)inpd selectedText];
 					lastInserted = nil;
 				} else {
