@@ -15,19 +15,26 @@ static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmout
   if (cycles == nil) {
     cycles = [[NSMutableArray alloc] init];
 
-    // Get the current information
-    NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithContentsOfFile:oldPath];
+    // If there's current information in the other format, then use it
+    if ([[NSFileManager defaultManager] fileExistsAtPath:oldPath]) {
+      NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithContentsOfFile:oldPath];
 
-    NSNumber *uppercaseS = [settings objectForKey:@"uppercase"];
-    NSNumber *lowercaseS = [settings objectForKey:@"lowercase"];
-    NSNumber *capitalizedS = [settings objectForKey:@"capitalized"];
-    NSNumber *concatS = [settings objectForKey:@"concatenated"];
+      NSNumber *uppercaseS = [settings objectForKey:@"uppercase"];
+      NSNumber *lowercaseS = [settings objectForKey:@"lowercase"];
+      NSNumber *capitalizedS = [settings objectForKey:@"capitalized"];
+      NSNumber *concatS = [settings objectForKey:@"concatenated"];
 
-    // Append to array in default order
-    [cycles addObject:@[@"uppercase", @"Uppercase: SAMPLE TEXT", uppercaseS]];
-    [cycles addObject:@[@"lowercase", @"Lowercase: sample text", lowercaseS]];
-    [cycles addObject:@[@"capitalized", @"Capitalized: Sample Text", capitalizedS]];
-    [cycles addObject:@[@"concatenated", @"Concatenated: SampleText", concatS]];
+      // Append to array in default order
+      [cycles addObject:@[@"uppercase", @"Uppercase: SAMPLE TEXT", uppercaseS]];
+      [cycles addObject:@[@"lowercase", @"Lowercase: sample text", lowercaseS]];
+      [cycles addObject:@[@"capitalized", @"Capitalized: Sample Text", capitalizedS]];
+      [cycles addObject:@[@"concatenated", @"Concatenated: SampleText", concatS]];
+    } else { // default info
+      [cycles addObject:@[@"uppercase", @"Uppercase: SAMPLE TEXT", @(1)]];
+      [cycles addObject:@[@"lowercase", @"Lowercase: sample text", @(1)]];
+      [cycles addObject:@[@"capitalized", @"Capitalized: Sample Text", @(1)]];
+      [cycles addObject:@[@"concatenated", @"Concatenated: SampleText", @(1)]];
+    }
   }
   [cycles writeToFile:newPath atomically:YES];
   cycles = [[NSMutableArray alloc] initWithContentsOfFile:newPath]; // prevents weird crash on saving for the first time
@@ -149,6 +156,7 @@ static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmout
   [cycles removeObjectAtIndex:sourceIndexPath.row];
   [cycles insertObject:cycle atIndex:destinationIndexPath.row];
   [cycles writeToFile:newPath atomically:YES];
+  [self reloadSpecifiers];
   return;
 }
 
