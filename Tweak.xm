@@ -3,13 +3,17 @@
 #import <UIKit/UIKeyboardInput.h>
 #import <UIKit/UITextInput.h>
 
+// IPC Notifications for third-party keyboards
+#import <CoreFoundation/CoreFoundation.h>
+#import <CoreFoundation/CFNotificationCenter.h>
+extern "C" CFNotificationCenterRef CFNotificationCenterGetDistributedCenter();
+
 @interface UIKeyboardImpl : UIView
 	+ (UIKeyboardImpl*)activeInstance;
 	- (void)insertText:(id)text;
 
 	@property (readonly, assign, nonatomic) UIResponder <UITextInputPrivate> *privateInputDelegate;
 	@property (readonly, assign, nonatomic) UIResponder <UITextInput> *inputDelegate;
-	@property (readonly, nonatomic) id <UIKeyboardInput> legacyInputDelegate;
 @end
 
 @interface UIKBKey : NSObject
@@ -35,6 +39,10 @@
 	@property (nonatomic,readonly) BOOL _isKeyDown; 
 	@property (nonatomic,readonly) long long _keyCode;    
 	- (void*)_hidEvent;     
+@end
+
+// Use to add support for 3rd party keyboards
+@interface NSDistributedNotificationCenter : NSNotificationCenter
 @end
 
 NSMutableArray *variants = [[NSMutableArray alloc] init];
@@ -202,7 +210,26 @@ static void textReplace() {
 	}
 %end
 
+// Third party notification handler
+void thirdPartyShift(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
+	if ((int)[variants count] > 0) {
+		textReplace();
+	}
+}
+
 %hook UIKeyboardImpl
+	- (id)initWithFrame:(CGRect)arg1 {
+		// Remove any current ones, and add your own (keep up to date with only one observer)
+		CFNotificationCenterRemoveObserver(CFNotificationCenterGetDistributedCenter(), NULL, CFSTR("com.hackingdartmouth.shiftcycle.thirdpartyshift"), NULL);
+		CFNotificationCenterAddObserver(CFNotificationCenterGetDistributedCenter(),
+			NULL,
+			&thirdPartyShift,
+			CFSTR("com.hackingdartmouth.shiftcycle.thirdpartyshift"),
+			NULL,
+			CFNotificationSuspensionBehaviorDeliverImmediately);
+		return %orig;
+	}
+
 	-(void)updateForChangedSelection {
 		%orig;
 
@@ -252,6 +279,18 @@ static void textReplace() {
 					textReplace();
 			}
 		}
+		%orig;
+	}
+%end
+
+// SwiftKey compatibility (hook into 'Shift' key touchUp)
+%hook SKKeyboardShiftKey // (SKKeyboardCharacterKey general key)
+	-(void)touchUpInsideAtPoint:(id)arg1 activeTouch:(id)arg2 matchingTouchDown:(id)arg3 movedOutsideKey:(id)arg4 {
+		CFNotificationCenterPostNotification(CFNotificationCenterGetDistributedCenter(),
+			CFSTR("com.hackingdartmouth.shiftcycle.thirdpartyshift"), 
+			NULL, 
+			NULL,
+			kCFNotificationDeliverImmediately);
 		%orig;
 	}
 %end

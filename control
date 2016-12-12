@@ -1,7 +1,7 @@
 Package: com.hackingdartmouth.shiftcycle
 Name: ShiftCycle
 Depends: mobilesubstrate
-Version: 1.2.0
+Version: 1.3.0
 Architecture: iphoneos-arm
 Description: Allows you to cycle a selection through uppercase, lowercase, and more with the Shift key.
 Maintainer: Alex Beals <Alex.Beals.18@dartmouth.edu>
