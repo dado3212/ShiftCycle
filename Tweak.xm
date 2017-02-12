@@ -49,6 +49,7 @@ NSMutableArray *variants = [[NSMutableArray alloc] init];
 int variant = 0;
 NSString *lastInserted = nil;
 bool change = false;
+NSRegularExpression *germanRegex = [NSRegularExpression regularExpressionWithPattern:@"(^|\\W)ß" options:NSRegularExpressionCaseInsensitive error:nil];
 static NSString *oldPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle.plist";
 static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle-2.plist";
 
@@ -83,8 +84,8 @@ static void fillArray(NSString *original) {
 		// uppercase is hardcoded to fix German's weird capitalization change of ß in 2010
 		NSString *uppercase = [[original stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString];
 		NSString *lowercase = [original lowercaseString];
-		NSString *capitalized = [original capitalizedString];
-		NSString *concat = [[original capitalizedString] stringByReplacingOccurrencesOfString:@" " withString:@""];
+		NSString *capitalized = [[germanRegex stringByReplacingMatchesInString:original options:0 range:NSMakeRange(0, [original length]) withTemplate:@"$1ẞ"] capitalizedString];
+		NSString *concat = [capitalized stringByReplacingOccurrencesOfString:@" " withString:@""];
 		if (![variants containsObject:uppercase] && upper)
 			[variants addObject:uppercase];
 		if (![variants containsObject:lowercase] && lower)
@@ -105,9 +106,9 @@ static void fillArray(NSString *original) {
 				} else if ([cycleType isEqualToString:@"lowercase"]) {
 					newString = [original lowercaseString];
 				} else if ([cycleType isEqualToString:@"capitalized"]) {
-					newString = [original capitalizedString];
+					newString = [[germanRegex stringByReplacingMatchesInString:original options:0 range:NSMakeRange(0, [original length]) withTemplate:@"$1ẞ"] capitalizedString];
 				} else if ([cycleType isEqualToString:@"concatenated"]) {
-					newString = [[original capitalizedString] stringByReplacingOccurrencesOfString:@" " withString:@""];
+					newString = [[[germanRegex stringByReplacingMatchesInString:original options:0 range:NSMakeRange(0, [original length]) withTemplate:@"$1ẞ"] capitalizedString] stringByReplacingOccurrencesOfString:@" " withString:@""];
 				}
 				if (![variants containsObject:newString])
 					[variants addObject:newString];
