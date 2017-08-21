@@ -4,9 +4,20 @@ static NSString *oldPath = @"/var/mobile/Library/Preferences/com.hackingdartmout
 static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle-2.plist";
 
 @interface ShiftCycleListController: PSEditableListController {
-    NSMutableArray *cycles;
+  NSMutableArray *cycles;
 }
 @end
+
+static NSMutableArray *getDefaults() {
+  NSMutableArray *defaultCycles = [[NSMutableArray alloc] init];
+
+  [defaultCycles addObject:@[@"uppercase", @"Uppercase: SAMPLE TEXT", @(1)]];
+  [defaultCycles addObject:@[@"lowercase", @"Lowercase: sample text", @(1)]];
+  [defaultCycles addObject:@[@"capitalized", @"Capitalized: Sample Text", @(1)]];
+  [defaultCycles addObject:@[@"concatenated", @"Concatenated: SampleText", @(1)]];
+
+  return defaultCycles;
+}
 
 @implementation ShiftCycleListController
 - (void)viewDidLoad {
@@ -30,20 +41,36 @@ static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmout
       [cycles addObject:@[@"capitalized", @"Capitalized: Sample Text", capitalizedS]];
       [cycles addObject:@[@"concatenated", @"Concatenated: SampleText", concatS]];
     } else { // default info
-      [cycles addObject:@[@"uppercase", @"Uppercase: SAMPLE TEXT", @(1)]];
-      [cycles addObject:@[@"lowercase", @"Lowercase: sample text", @(1)]];
-      [cycles addObject:@[@"capitalized", @"Capitalized: Sample Text", @(1)]];
-      [cycles addObject:@[@"concatenated", @"Concatenated: SampleText", @(1)]];
+      cycles = getDefaults();
     }
   }
+  // Verify that the data is correct
+  if ([cycles count] != 4) {
+    cycles = getDefaults();
+  } else {
+    bool valid = true;
+    for (int i = 0; i < 4; i++) {
+      if (
+        [cycles[i] count] != 3 ||
+        ![cycles[i][0] isKindOfClass:[NSString class]] ||
+        ![cycles[i][1] isKindOfClass:[NSString class]]
+      ) {
+        valid = false;
+      }
+    }
+    if (!valid) {
+      cycles = getDefaults();
+    }
+  }
+
   [cycles writeToFile:newPath atomically:YES];
   cycles = [[NSMutableArray alloc] initWithContentsOfFile:newPath]; // prevents weird crash on saving for the first time
-  
+
   [super viewDidLoad];
 }
 
 - (id)specifiers {
-	if(_specifiers == nil) {
+	if (_specifiers == nil) {
     NSMutableArray *specs = [NSMutableArray array];
 
     PSSpecifier* group = [PSSpecifier preferenceSpecifierNamed:@"Cycle Options"
@@ -132,7 +159,6 @@ static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmout
 }
 
 -(void)setPreferenceValue:(id)value specifier:(PSSpecifier*)specifier {
-  NSLog(@"Trying to set: %@, %d", cycles, [specifier.properties[@"arrayIndex"] intValue]);
   cycles[[specifier.properties[@"arrayIndex"] intValue]][2] = value;
   [cycles writeToFile:newPath atomically:YES];
 }
@@ -165,7 +191,7 @@ static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmout
 }
 
 - (void)donate {
-  [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=GA2FFF2GUMMQ2&lc=US&item_name=Alex%20Beals&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHosted"]];
+  [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"https://www.paypal.me/alexbeals/5"]];
 }
 
 - (void)email {
