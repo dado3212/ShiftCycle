@@ -1,6 +1,5 @@
 #import <Preferences/Preferences.h>
 
-static NSString *oldPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle.plist";
 static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle-2.plist";
 
 @interface ShiftCycleListController: PSEditableListController {
@@ -21,28 +20,10 @@ static NSMutableArray *getDefaults() {
 
 @implementation ShiftCycleListController
 - (void)viewDidLoad {
-  // Handle switching over to the new storage method
+  // Just override if you're using the old version (try and squash bugs)
   cycles = [[NSMutableArray alloc] initWithContentsOfFile:newPath];
   if (cycles == nil) {
-    cycles = [[NSMutableArray alloc] init];
-
-    // If there's current information in the other format, then use it
-    if ([[NSFileManager defaultManager] fileExistsAtPath:oldPath]) {
-      NSMutableDictionary *settings = [NSMutableDictionary dictionaryWithContentsOfFile:oldPath];
-
-      NSNumber *uppercaseS = [settings objectForKey:@"uppercase"];
-      NSNumber *lowercaseS = [settings objectForKey:@"lowercase"];
-      NSNumber *capitalizedS = [settings objectForKey:@"capitalized"];
-      NSNumber *concatS = [settings objectForKey:@"concatenated"];
-
-      // Append to array in default order
-      [cycles addObject:@[@"uppercase", @"Uppercase: SAMPLE TEXT", uppercaseS]];
-      [cycles addObject:@[@"lowercase", @"Lowercase: sample text", lowercaseS]];
-      [cycles addObject:@[@"capitalized", @"Capitalized: Sample Text", capitalizedS]];
-      [cycles addObject:@[@"concatenated", @"Concatenated: SampleText", concatS]];
-    } else { // default info
-      cycles = getDefaults();
-    }
+    cycles = getDefaults();
   }
   // Verify that the data is correct
   if ([cycles count] != 4) {
