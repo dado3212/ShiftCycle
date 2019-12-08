@@ -1,8 +1,9 @@
-ARCHS = armv7 arm64 arm64e
+ARCHS = armv7 armv7s arm64 arm64e
 
 THEOS_DEVICE_IP = localhost
 THEOS_DEVICE_PORT = 2222
-FINALPACKAGE = 0
+
+FINALPACKAGE = 1
 
 include theos/makefiles/common.mk
 

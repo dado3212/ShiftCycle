@@ -37,8 +37,8 @@ extern "C" CFNotificationCenterRef CFNotificationCenterGetDistributedCenter();
 
 @interface UIPhysicalKeyboardEvent : NSObject
 	@property (nonatomic,readonly) BOOL _isKeyDown; 
-	@property (nonatomic,readonly) long long _keyCode;    
-	- (void*)_hidEvent;     
+	@property (nonatomic,readonly) long long _keyCode;		
+	- (void*)_hidEvent;		 
 @end
 
 // Use to add support for 3rd party keyboards
@@ -52,6 +52,31 @@ bool change = false;
 NSRegularExpression *germanRegex = [NSRegularExpression regularExpressionWithPattern:@"(^|\\W)ß" options:NSRegularExpressionCaseInsensitive error:nil];
 static NSString *oldPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle.plist";
 static NSString *newPath = @"/var/mobile/Library/Preferences/com.hackingdartmouth.shiftcycle-2.plist";
+
+static NSString *sarcasticify(NSString *original) {
+	// split the original string into pieces
+	NSMutableArray *chars = [NSMutableArray array];
+	[original enumerateSubstringsInRange: NSMakeRange(0, [original length]) options: NSStringEnumerationByComposedCharacterSequences
+			usingBlock: ^(NSString *inSubstring, NSRange inSubstringRange, NSRange inEnclosingRange, BOOL *outStop) {
+			[chars addObject:inSubstring];
+	}];
+
+	// capitalize
+	NSMutableString *result = [@"" mutableCopy];
+	BOOL capitalize = YES;
+	for (int i = 0; i < [chars count]; i++) {
+		if (capitalize) {
+			[result appendString:[[chars[i] stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString]];
+		} else {
+			[result appendString:[chars[i] lowercaseString]];
+		}
+		if ([[chars[i] stringByTrimmingCharactersInSet:[NSCharacterSet letterCharacterSet]] isEqualToString:@""]) {
+			capitalize = !capitalize;
+		}
+	}
+
+	return result;
+}
 
 // Function that takes in a string and fills a mutable array with all of the possible variants
 static void fillArray(NSString *original) {
@@ -75,17 +100,20 @@ static void fillArray(NSString *original) {
 		NSNumber *lowercaseS = [settings objectForKey:@"lowercase"];
 		NSNumber *capitalizedS = [settings objectForKey:@"capitalized"];
 		NSNumber *concatS = [settings objectForKey:@"concatenated"];
+		NSNumber *sarcasticS = [settings objectForKey:@"sarcastic"];
 
 		BOOL upper = (uppercaseS == nil || uppercaseS.integerValue == 1);
 		BOOL lower = (lowercaseS == nil || lowercaseS.integerValue == 1);
 		BOOL capital = (capitalizedS == nil || capitalizedS.integerValue == 1);
 		BOOL conc = (concatS == nil || concatS.integerValue == 1);
+		BOOL sarc = (sarcasticS == nil || sarcasticS.integerValue == 1);
 
 		// uppercase is hardcoded to fix German's weird capitalization change of ß in 2010
 		NSString *uppercase = [[original stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString];
 		NSString *lowercase = [original lowercaseString];
 		NSString *capitalized = [[germanRegex stringByReplacingMatchesInString:original options:0 range:NSMakeRange(0, [original length]) withTemplate:@"$1ẞ"] capitalizedString];
 		NSString *concat = [capitalized stringByReplacingOccurrencesOfString:@" " withString:@""];
+		NSString *sarcastic = sarcasticify(original);
 		if (![variants containsObject:uppercase] && upper)
 			[variants addObject:uppercase];
 		if (![variants containsObject:lowercase] && lower)
@@ -94,13 +122,15 @@ static void fillArray(NSString *original) {
 			[variants addObject:capitalized];
 		if (![variants containsObject:concat] && conc)
 			[variants addObject:concat];
+		if (![variants containsObject:sarcastic] && sarc)
+			[variants addObject:sarcastic];
 	} else { // Use the new saved ordered system
 		for (int i = 0; i < [cycles count]; i++) {
 			BOOL enabled = ([cycles[i][2] boolValue]);
-      
-      if (enabled) {
-      	NSString *cycleType = cycles[i][0];
-      	NSString *newString = nil;
+			
+			if (enabled) {
+				NSString *cycleType = cycles[i][0];
+				NSString *newString = nil;
 				if ([cycleType isEqualToString:@"uppercase"]) {
 					newString = [[original stringByReplacingOccurrencesOfString:@"ß" withString:@"ẞ"] uppercaseString];
 				} else if ([cycleType isEqualToString:@"lowercase"]) {
@@ -109,11 +139,13 @@ static void fillArray(NSString *original) {
 					newString = [[germanRegex stringByReplacingMatchesInString:original options:0 range:NSMakeRange(0, [original length]) withTemplate:@"$1ẞ"] capitalizedString];
 				} else if ([cycleType isEqualToString:@"concatenated"]) {
 					newString = [[[germanRegex stringByReplacingMatchesInString:original options:0 range:NSMakeRange(0, [original length]) withTemplate:@"$1ẞ"] capitalizedString] stringByReplacingOccurrencesOfString:@" " withString:@""];
+				} else if ([cycleType isEqualToString:@"sarcastic"]) {
+					newString = sarcasticify(original);
 				}
 				if (![variants containsObject:newString])
 					[variants addObject:newString];
 			}
-    }
+		}
 	}
 }
 
@@ -276,7 +308,7 @@ void thirdPartyShift(CFNotificationCenterRef center, void *observer, CFStringRef
 		UIPhysicalKeyboardEvent *key = (UIPhysicalKeyboardEvent *)arg1;
 		if ([key _isKeyDown]) { // trigger on keydown not keyup
 			if ([key _hidEvent]) { // if this is nil (whenever a press is made on the built in keyboard), the call to _keyCode will fail
-				if ([key _keyCode] == 57  && (int)[variants count] > 0) // caps-lock
+				if ([key _keyCode] == 57	&& (int)[variants count] > 0) // caps-lock
 					textReplace();
 			}
 		}

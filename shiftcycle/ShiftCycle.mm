@@ -14,6 +14,7 @@ static NSMutableArray *getDefaults() {
   [defaultCycles addObject:@[@"lowercase", @"Lowercase: sample text", @(1)]];
   [defaultCycles addObject:@[@"capitalized", @"Capitalized: Sample Text", @(1)]];
   [defaultCycles addObject:@[@"concatenated", @"Concatenated: SampleText", @(1)]];
+  [defaultCycles addObject:@[@"sarcastic", @"Sarcastic Text: SaMpLe TeXt", @(0)]];
 
   return defaultCycles;
 }
@@ -26,11 +27,11 @@ static NSMutableArray *getDefaults() {
     cycles = getDefaults();
   }
   // Verify that the data is correct
-  if ([cycles count] != 4) {
+  if ([cycles count] != 5) {
     cycles = getDefaults();
   } else {
     bool valid = true;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       if (
         [cycles[i] count] != 3 ||
         ![cycles[i][0] isKindOfClass:[NSString class]] ||
